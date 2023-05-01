@@ -2,6 +2,10 @@ import scapy.all as scapy
 import secrets
 import random
 import config
+from cryptography.fernet import Fernet
+from encryption import KEY #  shared key for decryption
+
+
 
 class CovertHeader(scapy.Packet):
     '''This class defines a header for use with your encrypted message.
@@ -47,7 +51,7 @@ def send_pkt(msg, seqNum, id, mLen, payload_len):
 
 # IPs, protocol, type, and code
 IP_SRC = '127.0.0.1'
-IP_DST = '127.0.0.1'
+IP_DST = input("Enter Destination Address (Recommend 127.0.0.1)")
 PROTO_ICMP = 1 #'\x01'
 ECHO_ICMP_TYPE = 8 #'\x08'
 ECHO_ICMP_CODE = 0 #'\x00'
@@ -57,20 +61,49 @@ sendSock = scapy.conf.L3socket()
 
 msg = input('Enter your message:  ')
 
+#encyrption
+f = Fernet(KEY)
+
 # process message
 # encode message to bytes
+
+# this didn't work but I tried to encrypt the message
+# encMsg = f.encrypt(msg.encode())
+
 encMsg = msg.encode()
 print('message length: ', len(encMsg),  'bytes')
+
+# if the message is over  80 bytes, this splits it into chunks which are stored in a list
+# each string in the list is encoded and sent to the server
+msgList = []
+done = False
+chunkStart = 0
+chunkEnd = 80
+
+
+while not done:
+    
+    msgChunk = encMsg[chunkStart:chunkEnd]
+    chunkStart += 80
+    chunkEnd += 80
+    msgList.append(msgChunk) # encrypts the message chunk before adding it to the list to be sent
+    if chunkStart > len(encMsg):
+            done = True
+            break
+    elif chunkEnd > len(encMsg):
+        msgList.append(encMsg[chunkStart:])
+        done = True
+
 
 # Loop sending 100 bytes at a time.
 # HINT: secrets module can be used to add randomized padding for the only or last packet 
 mLen = len(encMsg)
-offset = 0 # NOT needed yet.  Used to track what part of message is left to send in additional packets.
 seqNum = random.randint(0, 32766) # 32766 is 2^15 - 1
 id = random.randint(1, 255)
-while mLen > 0:
-    curMsg = encMsg
-    szPayload = mLen
-    mLen = 0
+
+for i in range(len(msgList)):
+    curMsg = msgList[i]
+    szPayload = len(msgList[i])
+    mLen = 1 if i < len(msgList) - 1 else 0 # goes to 0 if it's the last packet to signal the server to stop looking
 
     send_pkt(curMsg, seqNum, id, mLen, szPayload)

@@ -2,6 +2,7 @@ import scapy.all as scapy
 import config
 from sys import exit
 from cryptography.fernet import Fernet
+from encryption import KEY # shared key for decryption
 
 
 class CovertHeader(scapy.Packet):
@@ -24,6 +25,8 @@ class CovertHeader(scapy.Packet):
                    scapy.BitField("final", 0, 1), # bit set to 1 for final packet
                    scapy.BitField("seqNum", 0, 15) ] # sequence number of current message
 
+finalMsg = ""
+f = Fernet(KEY)
 def process_icmp_only(pkt):
     '''
     Filter the packets one at a time as received.
@@ -35,17 +38,24 @@ def process_icmp_only(pkt):
         
             pkt[scapy.ICMP].decode_payload_as(CovertHeader)
             print('Received covert ICMP packet, processing')
-            print(pkt[CovertHeader].load.decode())
+            global finalMsg
+            #finalMsg = finalMsg + f.decrypt(pkt[CovertHeader].load.decode()) # adds the recent decoded packet to the final message
+            # above line didn't work for encryption
+            finalMsg = finalMsg + pkt[CovertHeader].load.decode()
+            if pkt[CovertHeader].final == 1: # checks for the end of the packet sequence and prints then resets the message
+                print(finalMsg)
+                finalMsg = ""
 
 #we need to change the default layer 3 socket type to catch the loopback packets
 scapy.conf.L3socket = scapy.L3RawSocket
 
 rcvSock = scapy.conf.L3socket()
-
+print("Server Running...")
 while True:
     try:
         #Capture one packet at a time, sending each to the process_icmp_only function defined above for processing/filtering
         rcvSock.sniff(count=1, prn=process_icmp_only)
+
     except KeyboardInterrupt as e:
         'Received keyboard interrupt, ending program'
         exit()
