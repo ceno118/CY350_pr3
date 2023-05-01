@@ -1,9 +1,9 @@
 import scapy.all as scapy
 import config
 from sys import exit
+from cryptography.fernet import Fernet
 
-#You do not need to use the header below
-# (you can delete it if you don't want/need it)
+
 class CovertHeader(scapy.Packet):
     '''This class defines a header for use with your encrypted message.
     You may define additional header fields if you want or need to. The seqNum 
@@ -26,16 +26,22 @@ class CovertHeader(scapy.Packet):
 
 def process_icmp_only(pkt):
     '''
-    Found that BPF filtering using the 'filter=' parameter is not working, we will filter the packets
-    one at a time as we receive them (this is slower, but should be fast enough in our case)
+    Filter the packets one at a time as received.
     '''
-    # TODO: Here is where you will begin processing packets - you are only interested in ICMP Echos
-      
+    # Only interested in ICMP packets.
+    if pkt.haslayer(scapy.ICMP):
+        
+        if pkt[scapy.ICMP].type == 8:
+        
+            pkt[scapy.ICMP].decode_payload_as(CovertHeader)
+            print('Received covert ICMP packet, processing')
+            print(pkt[CovertHeader].load.decode())
+
 #we need to change the default layer 3 socket type to catch the loopback packets
 scapy.conf.L3socket = scapy.L3RawSocket
+
 rcvSock = scapy.conf.L3socket()
 
-# You likely don't need to make changes to this loop
 while True:
     try:
         #Capture one packet at a time, sending each to the process_icmp_only function defined above for processing/filtering
